@@ -18,7 +18,7 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
   heroSubtitle = "Join the community",
   heroDescription = "Discover cutting-edge solutions designed for the modern digital landscape.",
   backgroundImage = "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2072&q=80",
-  videoUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+  videoUrl = "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   emailPlaceholder = "enter@email.com"
 }) => {
   const [email, setEmail] = useState('');
@@ -34,15 +34,44 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
     setMounted(true);
   }, []);
 
+  // Background hero video autoplays + loops on load, like a moving
+  // banner, instead of sitting on a static frame until someone clicks
+  // play. Browsers only allow autoplay when the video is muted, which it
+  // already is (see the <video> tag below).
+  //
+  // Important: isVideoPlaying only flips to true once play() actually
+  // *resolves* — not just because we called it. Setting it eagerly meant
+  // the static image was hidden immediately while the video was still
+  // failing to load (e.g. its source blocked by a network filter), which
+  // left a blank black box with nothing showing at all. On failure we
+  // deliberately do nothing, so the image stays visible as the fallback.
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current
+        .play()
+        .then(() => setIsVideoPlaying(true))
+        .catch(() => {
+          // Blocked/unsupported source — the static image stays up
+          // and the manual play button remains available.
+        });
+    }
+  }, []);
+
   const toggleDropdown = (dropdownName: string) => {
     setOpenDropdown(openDropdown === dropdownName ? null : dropdownName);
   };
 
   const handlePlayVideo = () => {
     if (videoRef.current) {
-      videoRef.current.play();
-      setIsVideoPlaying(true);
-      setIsVideoPaused(false);
+      videoRef.current
+        .play()
+        .then(() => {
+          setIsVideoPlaying(true);
+          setIsVideoPaused(false);
+        })
+        .catch(() => {
+          // Source still isn't playable — leave the image up.
+        });
     }
   };
 
@@ -146,7 +175,7 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
         {/* --- Media Header --- */}
         <header className="relative w-full aspect-video rounded-3xl overflow-hidden">
           <img src={backgroundImage} alt="Earth from space at night" className={`w-full h-full absolute inset-0 object-cover transition-opacity duration-500 ${isVideoPlaying ? 'opacity-0' : 'opacity-100'}`} />
-          <video ref={videoRef} src={videoUrl} className={`w-full h-full absolute inset-0 object-cover transition-opacity duration-500 ${isVideoPlaying ? 'opacity-100' : 'opacity-0'}`} onEnded={handleVideoEnded} playsInline muted />
+          <video ref={videoRef} src={videoUrl} className={`w-full h-full absolute inset-0 object-cover transition-opacity duration-500 ${isVideoPlaying ? 'opacity-100' : 'opacity-0'}`} onEnded={handleVideoEnded} playsInline muted loop autoPlay />
           <div className="absolute bottom-5 right-5 z-10">
             {!isVideoPlaying ? (
               <button onClick={handlePlayVideo} className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center hover:bg-white/30 transition-all duration-200 shadow-lg">
