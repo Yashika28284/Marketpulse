@@ -108,6 +108,27 @@ function buildRouter({ engines, riskEngine, db }) {
     res.json(riskEngine.accountSummary(req.account.accountId));
   });
 
+  // Admin-only: every registered account, with their live position/
+  // exposure summary attached. This is the actual "look up all users"
+  // view — /admin/accounts/:accountId (below) only ever shows one
+  // account at a time, and only if you already know its accountId.
+  router.get('/admin/accounts', requireRole('admin'), async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'database not available' });
+    try {
+      const users = await db.listUsers();
+      const accounts = users.map((u) => ({
+        accountId: u.account_id,
+        email: u.email,
+        role: u.role,
+        createdAt: u.created_at,
+        ...riskEngine.accountSummary(u.account_id),
+      }));
+      res.json({ accounts });
+    } catch (err) {
+      res.status(500).json({ error: 'could not list accounts' });
+    }
+  });
+
   // Admin-only: inspect any account's exposure/positions, or override
   // risk limits for an account. Traders can only ever see their own
   // (via GET /account above).

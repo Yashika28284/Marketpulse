@@ -109,6 +109,16 @@ class Db {
     );
     return result.rows[0] || null;
   }
+
+  // Every registered account, oldest first. Used by the admin-only
+  // "list all accounts" endpoint — separate from RiskEngine's positions
+  // map, which only knows about accounts that have actually traded.
+  async listUsers() {
+    const result = await this.pool.query(
+      `SELECT account_id, email, role, created_at FROM users ORDER BY created_at ASC`
+    );
+    return result.rows;
+  }
 }
 
 module.exports = { Db };

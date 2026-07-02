@@ -263,6 +263,34 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AccountSummary' }
 
+  /api/admin/accounts:
+    get:
+      summary: List every registered account with their risk summary (admin only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: All accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accounts:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/AccountSummary'
+                        - type: object
+                          properties:
+                            email: { type: string }
+                            role: { type: string }
+                            createdAt: { type: string, format: date-time }
+        '403':
+          description: Caller is not an admin
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /api/admin/accounts/{accountId}:
     get:
       summary: Get any account's risk/account summary (admin only)

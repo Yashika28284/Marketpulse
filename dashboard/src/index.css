@@ -88,6 +88,8 @@ body { font-family: -apple-system, sans-serif; background: #0e0e10; color: #eee;
 .row.ask { color: #e74c3c; }
 .row.bid { color: #2ecc71; }
 .row.trade { color: #ccc; font-size: 12px; }
+.pos-long { color: #2ecc71; font-weight: 600; }
+.pos-short { color: #e74c3c; font-weight: 600; }
 .order-form { display: flex; flex-direction: column; gap: 8px; }
 .order-form select, .order-form input, .order-form button { padding: 6px; background: #222; color: #eee; border: 1px solid #333; border-radius: 4px; }
 .bar { background: #222; height: 6px; border-radius: 3px; overflow: hidden; margin: 6px 0; }
