@@ -1,19 +1,60 @@
 'use strict';
 
+const crypto = require('crypto');
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const { authenticate, rateLimit, issueToken, requireRole } = require('./middleware');
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function buildRouter({ engines, riskEngine, db }) {
   const router = express.Router();
 
-  // Dev-only: mint a token for an accountId (+ optional role), no real
-  // login flow / credential check here. In a real deployment this
-  // endpoint wouldn't let the caller self-assign 'admin' — role would
-  // come from an identity provider or a DB lookup, not the request body.
+  // Dev-only: mint a token for any accountId (+ optional role), no
+  // credential check. Kept around for local testing / the test suite —
+  // real clients should use /auth/register + /auth/login below, which
+  // actually verify a password.
   router.post('/auth/token', (req, res) => {
     const { accountId, role } = req.body;
     if (!accountId) return res.status(400).json({ error: 'accountId required' });
     res.json({ token: issueToken(accountId, role) });
+  });
+
+  // Real auth: create an account with a hashed password.
+  router.post('/auth/register', async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'database not available' });
+    const { email, password } = req.body || {};
+    if (!email || !EMAIL_RE.test(email)) return res.status(400).json({ error: 'valid email required' });
+    if (!password || password.length < 8) return res.status(400).json({ error: 'password must be at least 8 characters' });
+
+    const existing = await db.getUserByEmail(email).catch(() => null);
+    if (existing) return res.status(409).json({ error: 'an account with that email already exists' });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const accountId = crypto.randomUUID();
+    try {
+      const user = await db.createUser({ accountId, email, passwordHash, role: 'trader' });
+      res.status(201).json({ token: issueToken(user.account_id, user.role), accountId: user.account_id, email: user.email });
+    } catch (err) {
+      res.status(500).json({ error: 'could not create account' });
+    }
+  });
+
+  // Real auth: verify email + password, then issue a JWT the same way
+  // /auth/token does — same tokens, same downstream RBAC, just backed by
+  // a real credential check this time.
+  router.post('/auth/login', async (req, res) => {
+    if (!db) return res.status(503).json({ error: 'database not available' });
+    const { email, password } = req.body || {};
+    if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+
+    const user = await db.getUserByEmail(email).catch(() => null);
+    if (!user) return res.status(401).json({ error: 'invalid email or password' });
+
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) return res.status(401).json({ error: 'invalid email or password' });
+
+    res.json({ token: issueToken(user.account_id, user.role), accountId: user.account_id, email: user.email });
   });
 
   router.use(authenticate, rateLimit({ windowMs: 1000, max: 100 }));

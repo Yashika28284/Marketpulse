@@ -13,7 +13,7 @@ interface NavbarHeroProps {
 }
 
 const NavbarHero: React.FC<NavbarHeroProps> = ({
-  brandName = "nexus",
+  brandName = "MarketPulse",
   heroTitle = "Innovation Meets Simplicity",
   heroSubtitle = "Join the community",
   heroDescription = "Discover cutting-edge solutions designed for the modern digital landscape.",
@@ -69,6 +69,14 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
     setIsVideoPaused(false);
   };
 
+  // Full reload (not just a hash set) because there's no client-side
+  // router here — main.jsx picks the view once, on initial load, based
+  // on window.location.hash.
+  const goToDashboard = () => {
+    window.location.href = '#dashboard';
+    window.location.reload();
+  };
+
   const ThemeToggleButton = () => {
     if (!mounted) return <div className="w-10 h-10" />;
     return (
@@ -91,40 +99,12 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
             <a href="#" className="font-bold text-2xl pb-1 text-foreground cursor-pointer flex-shrink-0">
               {brandName}
             </a>
-            <nav className="hidden lg:flex text-muted-foreground font-medium">
-              <ul className="flex items-center space-x-2">
-                <li><a href="#" className="hover:text-foreground px-3 py-2 text-sm transition-colors rounded-lg">About</a></li>
-                <li className="relative">
-                  <button onClick={() => toggleDropdown('desktop-resources')} className="flex items-center hover:text-foreground px-3 py-2 text-sm transition-colors rounded-lg">
-                    Resources<ChevronDown className={`h-4 w-4 ml-1 transition-transform ${openDropdown === 'desktop-resources' ? 'rotate-180' : ''}`} />
-                  </button>
-                  {openDropdown === 'desktop-resources' && (
-                    <ul className="absolute top-full left-0 mt-2 p-2 bg-card border border-border shadow-lg rounded-xl z-20 w-48">
-                      <li><a href="#" className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg">Submenu 1</a></li>
-                      <li><a href="#" className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg">Submenu 2</a></li>
-                    </ul>
-                  )}
-                </li>
-                <li><a href="#" className="hover:text-foreground px-3 py-2 text-sm transition-colors rounded-lg">Blog</a></li>
-                <li className="relative">
-                  <button onClick={() => toggleDropdown('desktop-pricing')} className="flex items-center hover:text-foreground px-3 py-2 text-sm transition-colors rounded-lg">
-                    Plans & Pricing<ChevronDown className={`h-4 w-4 ml-1 transition-transform ${openDropdown === 'desktop-pricing' ? 'rotate-180' : ''}`} />
-                  </button>
-                  {openDropdown === 'desktop-pricing' && (
-                    <ul className="absolute top-full left-0 mt-2 p-2 bg-card border border-border shadow-lg rounded-xl z-20 w-48">
-                      <li><a href="#" className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg">Plan A</a></li>
-                      <li><a href="#" className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg">Plan B</a></li>
-                    </ul>
-                  )}
-                </li>
-              </ul>
-            </nav>
           </div>
 
           <div className="flex items-center gap-3">
             <div className="hidden lg:flex items-center gap-3">
-              <a href="#" className="text-foreground hover:text-muted-foreground cursor-pointer py-2 px-4 text-sm capitalize font-medium transition-colors rounded-xl">Login</a>
-              <button className="bg-foreground hover:bg-muted-foreground text-background py-2.5 px-5 text-sm rounded-xl capitalize font-medium transition-colors flex items-center gap-2">
+              <button onClick={goToDashboard} className="text-foreground hover:text-muted-foreground cursor-pointer py-2 px-4 text-sm capitalize font-medium transition-colors rounded-xl">Login</button>
+              <button onClick={goToDashboard} className="bg-foreground hover:bg-muted-foreground text-background py-2.5 px-5 text-sm rounded-xl capitalize font-medium transition-colors flex items-center gap-2">
                 Get Started<ArrowRight className="h-4 w-4" />
               </button>
             </div>
@@ -135,25 +115,9 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
               </button>
               {isMobileMenuOpen && (
                 <ul className="absolute top-full right-0 mt-2 p-2 shadow-lg bg-card border border-border rounded-xl w-56 z-30">
-                  <li><a href="#" className="block px-3 py-2 text-sm text-foreground hover:bg-muted rounded-lg">About</a></li>
-                  <li><button onClick={() => toggleDropdown('mobile-resources')} className="w-full flex items-center justify-between px-3 py-2 text-sm text-foreground hover:bg-muted rounded-lg">
-                      Resources<ChevronDown className={`h-4 w-4 transition-transform ${openDropdown === 'mobile-resources' ? 'rotate-180' : ''}`} />
-                  </button>
-                  {openDropdown === 'mobile-resources' && (<ul className="ml-4 mt-1 border-l border-border pl-3">
-                      <li><a href="#" className="block px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg">Submenu 1</a></li>
-                      <li><a href="#" className="block px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg">Submenu 2</a></li>
-                  </ul>)}</li>
-                  <li><a href="#" className="block px-3 py-2 text-sm text-foreground hover:bg-muted rounded-lg">Blog</a></li>
-                  <li><button onClick={() => toggleDropdown('mobile-pricing')} className="w-full flex items-center justify-between px-3 py-2 text-sm text-foreground hover:bg-muted rounded-lg">
-                      Plans & Pricing<ChevronDown className={`h-4 w-4 transition-transform ${openDropdown === 'mobile-pricing' ? 'rotate-180' : ''}`} />
-                  </button>
-                  {openDropdown === 'mobile-pricing' && (<ul className="ml-4 mt-1 border-l border-border pl-3">
-                      <li><a href="#" className="block px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg">Plan A</a></li>
-                      <li><a href="#" className="block px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg">Plan B</a></li>
-                  </ul>)}</li>
-                  <li className="border-t border-border mt-2 pt-2 space-y-2">
-                    <a href="#" className="block w-full text-center px-3 py-2 text-sm text-foreground hover:bg-muted rounded-lg">Login</a>
-                    <button className="w-full bg-foreground text-background hover:bg-muted-foreground px-3 py-2.5 text-sm rounded-lg flex items-center justify-center gap-2 font-medium">
+                  <li className="space-y-2">
+                    <button onClick={goToDashboard} className="block w-full text-center px-3 py-2 text-sm text-foreground hover:bg-muted rounded-lg">Login</button>
+                    <button onClick={goToDashboard} className="w-full bg-foreground text-background hover:bg-muted-foreground px-3 py-2.5 text-sm rounded-lg flex items-center justify-center gap-2 font-medium">
                       Get Started<ArrowRight className="h-4 w-4" />
                     </button>
                   </li>

@@ -30,6 +30,15 @@ CREATE TABLE IF NOT EXISTS trades (
   ts TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS users (
+  id BIGSERIAL PRIMARY KEY,
+  account_id TEXT UNIQUE NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'trader',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_order_events_account ON order_events(account_id);
 CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
 `;
@@ -79,6 +88,26 @@ class Db {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [trade.id, trade.symbol, trade.price, trade.qty, trade.buyOrderId, trade.sellOrderId, trade.buyAccountId, trade.sellAccountId]
     );
+  }
+
+  // --- Users (real register/login, separate from the dev /auth/token flow) ---
+
+  async createUser({ accountId, email, passwordHash, role = 'trader' }) {
+    const result = await this.pool.query(
+      `INSERT INTO users (account_id, email, password_hash, role)
+       VALUES ($1,$2,$3,$4)
+       RETURNING id, account_id, email, role, created_at`,
+      [accountId, email.toLowerCase(), passwordHash, role]
+    );
+    return result.rows[0];
+  }
+
+  async getUserByEmail(email) {
+    const result = await this.pool.query(
+      `SELECT id, account_id, email, password_hash, role FROM users WHERE email = $1`,
+      [email.toLowerCase()]
+    );
+    return result.rows[0] || null;
   }
 }
 
