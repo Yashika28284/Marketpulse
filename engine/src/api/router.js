@@ -7,6 +7,31 @@ const { authenticate, rateLimit, issueToken, requireRole } = require('./middlewa
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Resolves whatever an admin typed into an accountId field into the
+// actual accountId (UUID) that RiskEngine/positions are keyed by, and
+// reports whether it corresponds to a real, registered user.
+//
+// Fixes a real bug: pasting a user's email into an admin route that
+// expects an accountId used to silently succeed with a zeroed-out
+// summary (wrong map key => empty position map => default limits),
+// which looked like "the admin sees different exposure than the user
+// sees for themselves" but was actually just a lookup-key mismatch.
+//
+// Without a db connected (dev-only /auth/token mode, no real users
+// table), there's nothing to verify against, so we trust the caller
+// and keep the old lenient behavior — `found` is null, not false.
+async function resolveAccountId(db, raw) {
+  if (!db) return { accountId: raw, found: null };
+
+  if (EMAIL_RE.test(raw)) {
+    const user = await db.getUserByEmail(raw).catch(() => null);
+    return { accountId: user ? user.account_id : raw, found: !!user };
+  }
+
+  const user = await db.getUserByAccountId(raw).catch(() => null);
+  return { accountId: raw, found: !!user };
+}
+
 function buildRouter({ engines, riskEngine, db }) {
   const router = express.Router();
 
@@ -132,17 +157,25 @@ function buildRouter({ engines, riskEngine, db }) {
   // Admin-only: inspect any account's exposure/positions, or override
   // risk limits for an account. Traders can only ever see their own
   // (via GET /account above).
-  router.get('/admin/accounts/:accountId', requireRole('admin'), (req, res) => {
-    res.json(riskEngine.accountSummary(req.params.accountId));
+  router.get('/admin/accounts/:accountId', requireRole('admin'), async (req, res) => {
+    const { accountId, found } = await resolveAccountId(db, req.params.accountId);
+    if (found === false) {
+      return res.status(404).json({ error: `no account found for '${req.params.accountId}'` });
+    }
+    res.json(riskEngine.accountSummary(accountId));
   });
 
-  router.put('/admin/accounts/:accountId/limits', requireRole('admin'), (req, res) => {
+  router.put('/admin/accounts/:accountId/limits', requireRole('admin'), async (req, res) => {
     const { exposureLimit, positionLimit } = req.body;
     if (exposureLimit == null || positionLimit == null) {
       return res.status(400).json({ error: 'exposureLimit and positionLimit required' });
     }
-    riskEngine.setAccountLimits(req.params.accountId, { exposureLimit, positionLimit });
-    res.json(riskEngine.accountSummary(req.params.accountId));
+    const { accountId, found } = await resolveAccountId(db, req.params.accountId);
+    if (found === false) {
+      return res.status(404).json({ error: `no account found for '${req.params.accountId}'` });
+    }
+    riskEngine.setAccountLimits(accountId, { exposureLimit, positionLimit });
+    res.json(riskEngine.accountSummary(accountId));
   });
 
   return router;

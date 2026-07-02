@@ -110,6 +110,17 @@ class Db {
     return result.rows[0] || null;
   }
 
+  // Used by the admin account-lookup route to confirm an accountId
+  // actually corresponds to a registered user, instead of silently
+  // returning a zeroed-out risk summary for a typo'd or wrong id.
+  async getUserByAccountId(accountId) {
+    const result = await this.pool.query(
+      `SELECT id, account_id, email, role FROM users WHERE account_id = $1`,
+      [accountId]
+    );
+    return result.rows[0] || null;
+  }
+
   // Every registered account, oldest first. Used by the admin-only
   // "list all accounts" endpoint — separate from RiskEngine's positions
   // map, which only knows about accounts that have actually traded.

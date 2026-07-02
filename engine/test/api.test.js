@@ -170,3 +170,70 @@ test('a bogus role in the token request falls back to trader', async () => {
     .set('Authorization', `Bearer ${token}`);
   assert.equal(res.status, 403);
 });
+
+// --- db-backed admin lookup: email resolution + 404 on unknown accounts ---
+
+function mockDb(users) {
+  return {
+    getUserByEmail: async (email) => users.find((u) => u.email === email.toLowerCase()) || null,
+    getUserByAccountId: async (accountId) => users.find((u) => u.account_id === accountId) || null,
+    listUsers: async () => users,
+  };
+}
+
+function appWithDb(users) {
+  const riskEngine = new RiskEngine({ defaultExposureLimit: 10_000_000, defaultPositionLimit: 1_000_000 });
+  const engines = new Map([['TEST', new MatchingEngine('TEST', { riskEngine })]]);
+  return buildApp({ engines, riskEngine, db: mockDb(users) });
+}
+
+test('admin looking up by email resolves to the same account as looking up by accountId', async () => {
+  const users = [{ account_id: 'uuid-123', email: 'trader@example.com', role: 'trader', created_at: new Date() }];
+  const app = appWithDb(users);
+  const adminToken = await tokenFor(app, 'admin-db', 'admin');
+
+  const byEmail = await request(app)
+    .get('/api/admin/accounts/trader@example.com')
+    .set('Authorization', `Bearer ${adminToken}`);
+  const byId = await request(app)
+    .get('/api/admin/accounts/uuid-123')
+    .set('Authorization', `Bearer ${adminToken}`);
+
+  assert.equal(byEmail.status, 200);
+  assert.equal(byId.status, 200);
+  assert.equal(byEmail.body.accountId, 'uuid-123');
+  assert.deepEqual(byEmail.body, byId.body);
+});
+
+test('admin looking up an unknown accountId gets 404, not a zeroed-out summary', async () => {
+  const users = [{ account_id: 'uuid-123', email: 'trader@example.com', role: 'trader', created_at: new Date() }];
+  const app = appWithDb(users);
+  const adminToken = await tokenFor(app, 'admin-db2', 'admin');
+
+  const res = await request(app)
+    .get('/api/admin/accounts/not-a-real-id')
+    .set('Authorization', `Bearer ${adminToken}`);
+  assert.equal(res.status, 404);
+});
+
+test('admin looking up an unknown email gets 404 on the limits route too', async () => {
+  const users = [{ account_id: 'uuid-123', email: 'trader@example.com', role: 'trader', created_at: new Date() }];
+  const app = appWithDb(users);
+  const adminToken = await tokenFor(app, 'admin-db3', 'admin');
+
+  const res = await request(app)
+    .put('/api/admin/accounts/nobody@example.com/limits')
+    .set('Authorization', `Bearer ${adminToken}`)
+    .send({ exposureLimit: 100, positionLimit: 10 });
+  assert.equal(res.status, 404);
+});
+
+test('without a db connected, admin lookup keeps the old lenient dev behavior', async () => {
+  const app = freshApp();
+  const adminToken = await tokenFor(app, 'admin-nodb', 'admin');
+  const res = await request(app)
+    .get('/api/admin/accounts/anything-goes')
+    .set('Authorization', `Bearer ${adminToken}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.accountId, 'anything-goes');
+});
