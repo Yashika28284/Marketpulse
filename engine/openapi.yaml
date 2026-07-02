@@ -1,0 +1,249 @@
+openapi: 3.0.3
+info:
+  title: MarketPulse Engine API
+  version: 1.0.0
+  description: |
+    Order matching, risk, and account API for the MarketPulse engine.
+    Served at `/docs` (this file) and mounted under `/api`.
+
+    Auth: call `POST /api/auth/token` to mint a JWT for an `accountId`.
+    This is a dev-only endpoint — in production, role would come from an
+    identity provider or DB lookup, not the request body.
+servers:
+  - url: http://localhost:4000
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Order:
+      type: object
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        symbol: { type: string }
+        side: { type: string, enum: [buy, sell] }
+        type: { type: string, enum: [limit, market, stop] }
+        price: { type: number, nullable: true }
+        stopPrice: { type: number, nullable: true }
+        qty: { type: number }
+        remaining: { type: number }
+        status:
+          type: string
+          enum: [open, filled, partial, cancelled, pending, rejected]
+        ts: { type: integer }
+    AccountSummary:
+      type: object
+      properties:
+        accountId: { type: string }
+        positions: { type: object, additionalProperties: { type: number } }
+        exposure: { type: number }
+        exposureLimit: { type: number }
+        positionLimit: { type: number }
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+
+paths:
+  /health:
+    get:
+      summary: Liveness check
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  symbols: { type: array, items: { type: string } }
+
+  /api/auth/token:
+    post:
+      summary: Mint a dev JWT for an accountId
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accountId]
+              properties:
+                accountId: { type: string }
+                role:
+                  type: string
+                  enum: [trader, admin]
+                  default: trader
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+        '400':
+          description: Missing accountId
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/orders:
+    post:
+      summary: Submit an order to the matching engine
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbol, side, qty]
+              properties:
+                symbol: { type: string }
+                side: { type: string, enum: [buy, sell] }
+                type: { type: string, enum: [limit, market, stop], default: limit }
+                price: { type: number }
+                stopPrice: { type: number }
+                qty: { type: number }
+      responses:
+        '201':
+          description: Order accepted (may be filled, partial, open, or rejected by risk checks)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '400':
+          description: Invalid order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Unknown symbol
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/orders/{id}:
+    delete:
+      summary: Cancel a resting order (owner or admin only)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { cancelled: { type: boolean } }
+        '403':
+          description: Not the order owner and not an admin
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Order or symbol not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/orderbook/{symbol}:
+    get:
+      summary: Get order book depth for a symbol
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema: { type: string }
+        - name: levels
+          in: query
+          required: false
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: Depth snapshot
+        '404':
+          description: Unknown symbol
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/account:
+    get:
+      summary: Get the caller's own risk/account summary
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Account summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountSummary' }
+
+  /api/admin/accounts/{accountId}:
+    get:
+      summary: Get any account's risk/account summary (admin only)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Account summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountSummary' }
+        '403':
+          description: Caller is not an admin
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/admin/accounts/{accountId}/limits:
+    put:
+      summary: Set exposure/position limits for an account (admin only)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [exposureLimit, positionLimit]
+              properties:
+                exposureLimit: { type: number }
+                positionLimit: { type: number }
+      responses:
+        '200':
+          description: Updated account summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountSummary' }
+        '403':
+          description: Caller is not an admin
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
