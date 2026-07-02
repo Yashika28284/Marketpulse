@@ -130,6 +130,32 @@ class Db {
     );
     return result.rows;
   }
+
+  // Full trade history, oldest first — used at boot to rebuild
+  // RiskEngine's in-memory positions/exposure (see index.js). ORDER BY
+  // ts *and* id: ts alone isn't a safe tie-breaker (two trades can land
+  // in the same millisecond), id is the monotonic insert order.
+  // NUMERIC columns come back from pg as strings, not numbers — cast
+  // price/qty here so callers never have to remember to do it (and so
+  // `buyerQty + trade.qty` in RiskEngine.applyFill doesn't silently
+  // become string concatenation instead of addition).
+  async getAllTrades() {
+    const result = await this.pool.query(
+      `SELECT trade_id, symbol, price, qty, buy_order_id, sell_order_id, buy_account_id, sell_account_id, ts
+       FROM trades ORDER BY ts ASC, id ASC`
+    );
+    return result.rows.map((r) => ({
+      id: r.trade_id,
+      symbol: r.symbol,
+      price: Number(r.price),
+      qty: Number(r.qty),
+      buyOrderId: r.buy_order_id,
+      sellOrderId: r.sell_order_id,
+      buyAccountId: r.buy_account_id,
+      sellAccountId: r.sell_account_id,
+      ts: r.ts,
+    }));
+  }
 }
 
 module.exports = { Db };

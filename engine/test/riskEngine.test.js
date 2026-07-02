@@ -59,3 +59,26 @@ test('accountSummary for an account with no history returns zeroed defaults', ()
   assert.equal(summary.exposure, 0);
   assert.equal(summary.exposureLimit, 1000);
 });
+
+test('replaying stored trade history reconstructs the same state as live trading (restart-survival)', () => {
+  // Simulates index.js's boot-time replay: a fresh RiskEngine (as if the
+  // process just restarted) fed trades in the shape Db.getAllTrades()
+  // returns them — camelCase keys, price/qty already cast to numbers.
+  const live = new RiskEngine({ defaultExposureLimit: 1_000_000, defaultPositionLimit: 100_000 });
+  const restarted = new RiskEngine({ defaultExposureLimit: 1_000_000, defaultPositionLimit: 100_000 });
+
+  const tradeHistory = [
+    { symbol: 'AAPL', price: 100, qty: 5, buyAccountId: 'alice', sellAccountId: 'bob' },
+    { symbol: 'AAPL', price: 102, qty: 2, buyAccountId: 'bob', sellAccountId: 'alice' },
+    { symbol: 'MSFT', price: 50, qty: 10, buyAccountId: 'alice', sellAccountId: 'carol' },
+  ];
+
+  for (const trade of tradeHistory) live.applyFill(trade);
+  for (const trade of tradeHistory) restarted.applyFill(trade); // <- the replay step
+
+  assert.deepEqual(restarted.accountSummary('alice'), live.accountSummary('alice'));
+  assert.deepEqual(restarted.accountSummary('bob'), live.accountSummary('bob'));
+  assert.deepEqual(restarted.accountSummary('carol'), live.accountSummary('carol'));
+  // Net AAPL for alice: +5 - 2 = 3
+  assert.equal(restarted.accountSummary('alice').positions.AAPL, 3);
+});

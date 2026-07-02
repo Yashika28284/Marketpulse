@@ -39,14 +39,27 @@ function buildRouter({ engines, riskEngine, db }) {
   // credential check. Kept around for local testing / the test suite —
   // real clients should use /auth/register + /auth/login below, which
   // actually verify a password.
-  router.post('/auth/token', (req, res) => {
-    const { accountId, role } = req.body;
-    if (!accountId) return res.status(400).json({ error: 'accountId required' });
-    res.json({ token: issueToken(accountId, role) });
-  });
+  //
+  // Gated out of production entirely: this route has no auth check at
+  // all, so leaving it reachable on a deployed instance means anyone
+  // can mint themselves an admin token with a single POST. Set
+  // NODE_ENV=production (or ALLOW_DEV_TOKEN=false explicitly) to kill it.
+  const devTokenEnabled = process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEV_TOKEN !== 'false';
+  if (devTokenEnabled) {
+    router.post('/auth/token', (req, res) => {
+      const { accountId, role } = req.body;
+      if (!accountId) return res.status(400).json({ error: 'accountId required' });
+      res.json({ token: issueToken(accountId, role) });
+    });
+  }
+
+  // Real auth routes get their own stricter rate limit — unlike the
+  // main API limiter below, this applies before authentication (keyed
+  // by IP), so failed-login/signup-spam attempts are throttled too.
+  const authRateLimit = rateLimit({ windowMs: 60_000, max: 10 });
 
   // Real auth: create an account with a hashed password.
-  router.post('/auth/register', async (req, res) => {
+  router.post('/auth/register', authRateLimit, async (req, res) => {
     if (!db) return res.status(503).json({ error: 'database not available' });
     const { email, password } = req.body || {};
     if (!email || !EMAIL_RE.test(email)) return res.status(400).json({ error: 'valid email required' });
@@ -58,6 +71,9 @@ function buildRouter({ engines, riskEngine, db }) {
     const passwordHash = await bcrypt.hash(password, 10);
     const accountId = crypto.randomUUID();
     try {
+      // role is always 'trader' here, never taken from the request body —
+      // this is the only place accounts get created, so this is the only
+      // place that matters for keeping admin non-self-servable.
       const user = await db.createUser({ accountId, email, passwordHash, role: 'trader' });
       res.status(201).json({ token: issueToken(user.account_id, user.role), accountId: user.account_id, email: user.email });
     } catch (err) {
@@ -68,7 +84,7 @@ function buildRouter({ engines, riskEngine, db }) {
   // Real auth: verify email + password, then issue a JWT the same way
   // /auth/token does — same tokens, same downstream RBAC, just backed by
   // a real credential check this time.
-  router.post('/auth/login', async (req, res) => {
+  router.post('/auth/login', authRateLimit, async (req, res) => {
     if (!db) return res.status(503).json({ error: 'database not available' });
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'email and password required' });
