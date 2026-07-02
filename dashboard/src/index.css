@@ -1,0 +1,95 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 1rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+}
+
+/* --- Legacy trading UI styles (unscoped by Tailwind's @layer base, kept
+   as plain CSS so the existing dashboard keeps its current look) --- */
+body { font-family: -apple-system, sans-serif; background: #0e0e10; color: #eee; margin: 0; }
+.app { padding: 16px; }
+.app header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; background: #555; }
+.status-dot.up { background: #2ecc71; }
+.status-dot.down { background: #e74c3c; }
+.grid { display: flex; gap: 16px; }
+.books { display: flex; flex-direction: column; gap: 16px; flex: 2; }
+.side-col { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+.panel { background: #18181b; border: 1px solid #2a2a2e; border-radius: 8px; padding: 12px; }
+.book { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
+.row { display: flex; justify-content: space-between; padding: 2px 4px; }
+.row.ask { color: #e74c3c; }
+.row.bid { color: #2ecc71; }
+.row.trade { color: #ccc; font-size: 12px; }
+.order-form { display: flex; flex-direction: column; gap: 8px; }
+.order-form select, .order-form input, .order-form button { padding: 6px; background: #222; color: #eee; border: 1px solid #333; border-radius: 4px; }
+.bar { background: #222; height: 6px; border-radius: 3px; overflow: hidden; margin: 6px 0; }
+.bar-fill { background: #f1c40f; height: 100%; }
+.status { font-size: 12px; color: #aaa; }
