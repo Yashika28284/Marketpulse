@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test engine (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: engine/package-lock.json
+
+      - name: Install dependencies
+        working-directory: engine
+        run: npm ci
+
+      - name: Run tests
+        working-directory: engine
+        run: npm test
+
+      - name: Benchmark smoke check
+        working-directory: engine
+        # Not a perf gate (CI runners are noisy/shared) — just proves the
+        # matching engine runs correctly under load and the benchmark
+        # script doesn't crash or throw.
+        run: node src/benchmark/load.js
+
+  dashboard-build:
+    name: Build dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: dashboard/package.json
+
+      - name: Install dependencies
+        working-directory: dashboard
+        run: npm install
+
+      - name: Build
+        working-directory: dashboard
+        run: npm run build
