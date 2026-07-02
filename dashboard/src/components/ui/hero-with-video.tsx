@@ -34,10 +34,6 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
     setMounted(true);
   }, []);
 
-  const handleEmailSubmit = () => {
-    console.log('Email submitted:', email);
-  };
-
   const toggleDropdown = (dropdownName: string) => {
     setOpenDropdown(openDropdown === dropdownName ? null : dropdownName);
   };
@@ -77,6 +73,15 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
     window.location.reload();
   };
 
+  // "Join Now" carries the email the person just typed into the hero
+  // input over to the actual register form, instead of discarding it —
+  // sessionStorage is the simplest way to hand that off across the full
+  // page reload goToDashboard() does.
+  const goToRegister = () => {
+    sessionStorage.setItem('marketpulse_prefill', JSON.stringify({ mode: 'register', email }));
+    goToDashboard();
+  };
+
   const ThemeToggleButton = () => {
     if (!mounted) return <div className="w-10 h-10" />;
     return (
@@ -103,10 +108,7 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
 
           <div className="flex items-center gap-3">
             <div className="hidden lg:flex items-center gap-3">
-              <button onClick={goToDashboard} className="text-foreground hover:text-muted-foreground cursor-pointer py-2 px-4 text-sm capitalize font-medium transition-colors rounded-xl">Login</button>
-              <button onClick={goToDashboard} className="bg-foreground hover:bg-muted-foreground text-background py-2.5 px-5 text-sm rounded-xl capitalize font-medium transition-colors flex items-center gap-2">
-                Get Started<ArrowRight className="h-4 w-4" />
-              </button>
+              <button onClick={goToDashboard} className="bg-foreground hover:bg-muted-foreground text-background py-2.5 px-5 text-sm rounded-xl capitalize font-medium transition-colors flex items-center gap-2">Login</button>
             </div>
             <ThemeToggleButton />
             <div className="lg:hidden relative">
@@ -115,11 +117,8 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
               </button>
               {isMobileMenuOpen && (
                 <ul className="absolute top-full right-0 mt-2 p-2 shadow-lg bg-card border border-border rounded-xl w-56 z-30">
-                  <li className="space-y-2">
-                    <button onClick={goToDashboard} className="block w-full text-center px-3 py-2 text-sm text-foreground hover:bg-muted rounded-lg">Login</button>
-                    <button onClick={goToDashboard} className="w-full bg-foreground text-background hover:bg-muted-foreground px-3 py-2.5 text-sm rounded-lg flex items-center justify-center gap-2 font-medium">
-                      Get Started<ArrowRight className="h-4 w-4" />
-                    </button>
+                  <li>
+                    <button onClick={goToDashboard} className="w-full bg-foreground text-background hover:bg-muted-foreground px-3 py-2.5 text-sm rounded-lg flex items-center justify-center gap-2 font-medium">Login</button>
                   </li>
                 </ul>
               )}
@@ -135,9 +134,9 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
             <div className="mt-8 flex items-center justify-center gap-3 sm:gap-4 flex-wrap">
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
-                <input type="email" placeholder={emailPlaceholder} value={email} onChange={(e) => setEmail(e.target.value)} className="w-full max-w-xs bg-muted border-border text-foreground placeholder-muted-foreground font-medium pl-10 pr-4 py-2 text-sm sm:pl-11 sm:py-3 sm:text-base rounded-full focus:outline-none focus:ring-2 focus:ring-ring" />
+                <input type="email" placeholder={emailPlaceholder} value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') goToRegister(); }} className="w-full max-w-xs bg-muted border-border text-foreground placeholder-muted-foreground font-medium pl-10 pr-4 py-2 text-sm sm:pl-11 sm:py-3 sm:text-base rounded-full focus:outline-none focus:ring-2 focus:ring-ring" />
               </div>
-              <button onClick={handleEmailSubmit} className="bg-foreground hover:bg-muted-foreground text-background px-5 py-2 text-sm sm:px-6 sm:py-3 sm:text-base rounded-full normal-case font-medium transition-colors flex items-center gap-2">
+              <button onClick={goToRegister} className="bg-foreground hover:bg-muted-foreground text-background px-5 py-2 text-sm sm:px-6 sm:py-3 sm:text-base rounded-full normal-case font-medium transition-colors flex items-center gap-2">
                 Join Now<ArrowRight className="h-4 w-4" />
               </button>
             </div>

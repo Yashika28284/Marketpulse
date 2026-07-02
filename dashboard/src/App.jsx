@@ -20,6 +20,19 @@ export default function App() {
     }
   });
 
+  // "Join Now" on the landing page hands off { mode, email } here via
+  // sessionStorage (see hero-with-video.tsx's goToRegister). Read it once,
+  // then clear it so it doesn't stick around on a later manual visit.
+  const [authPrefill] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem('marketpulse_prefill');
+      sessionStorage.removeItem('marketpulse_prefill');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
   function handleAuthenticated(nextAuth) {
     setAuth(nextAuth);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextAuth));
@@ -60,7 +73,11 @@ export default function App() {
 
       {!auth ? (
         <div className="grid" style={{ justifyContent: 'center' }}>
-          <AuthForm onAuthenticated={handleAuthenticated} />
+          <AuthForm
+            onAuthenticated={handleAuthenticated}
+            initialMode={authPrefill?.mode || 'login'}
+            initialEmail={authPrefill?.email || ''}
+          />
         </div>
       ) : (
         <div className="grid">

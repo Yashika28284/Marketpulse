@@ -6,9 +6,9 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 // (and for register, create) a password-backed account in Postgres. This
 // replaces the old flow where the dashboard silently minted a dev token
 // for a hardcoded "demo_account" with no password at all.
-export default function AuthForm({ onAuthenticated }) {
-  const [mode, setMode] = useState('login'); // 'login' | 'register'
-  const [email, setEmail] = useState('');
+export default function AuthForm({ onAuthenticated, initialMode = 'login', initialEmail = '' }) {
+  const [mode, setMode] = useState(initialMode); // 'login' | 'register'
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
