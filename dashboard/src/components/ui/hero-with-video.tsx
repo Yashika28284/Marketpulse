@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useTheme } from '../next/next-themes';
-import { Play, Pause, Mail, ArrowRight, Menu, ChevronDown, Sun, Moon } from 'lucide-react';
+import { Mail, ArrowRight, Menu, ChevronDown } from 'lucide-react';
 
 interface NavbarHeroProps {
   brandName?: string;
@@ -25,14 +24,7 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  const [isVideoPaused, setIsVideoPaused] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Background hero video autoplays + loops on load, like a moving
   // banner, instead of sitting on a static frame until someone clicks
@@ -61,37 +53,8 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
     setOpenDropdown(openDropdown === dropdownName ? null : dropdownName);
   };
 
-  const handlePlayVideo = () => {
-    if (videoRef.current) {
-      videoRef.current
-        .play()
-        .then(() => {
-          setIsVideoPlaying(true);
-          setIsVideoPaused(false);
-        })
-        .catch(() => {
-          // Source still isn't playable — leave the image up.
-        });
-    }
-  };
-
-  const handlePauseVideo = () => {
-    if (videoRef.current) {
-      videoRef.current.pause();
-      setIsVideoPaused(true);
-    }
-  };
-  
-  const handleResumeVideo = () => {
-    if (videoRef.current) {
-      videoRef.current.play();
-      setIsVideoPaused(false);
-    }
-  };
-
   const handleVideoEnded = () => {
     setIsVideoPlaying(false);
-    setIsVideoPaused(false);
   };
 
   // Full reload (not just a hash set) because there's no client-side
@@ -111,19 +74,6 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
     goToDashboard();
   };
 
-  const ThemeToggleButton = () => {
-    if (!mounted) return <div className="w-10 h-10" />;
-    return (
-      <button
-        onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-        className="bg-muted hover:bg-border flex-shrink-0 p-2.5 rounded-full transition-colors"
-        aria-label="Toggle theme"
-      >
-        {theme === "light" ? <Moon className="h-5 w-5 text-foreground" /> : <Sun className="h-5 w-5 text-foreground" />}
-      </button>
-    );
-  };
-
   return (
     <main className="absolute inset-0 bg-background overflow-y-auto">
       <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
@@ -139,7 +89,6 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
             <div className="hidden lg:flex items-center gap-3">
               <button onClick={goToDashboard} className="bg-foreground hover:bg-muted-foreground text-background py-2.5 px-5 text-sm rounded-xl capitalize font-medium transition-colors flex items-center gap-2">Login</button>
             </div>
-            <ThemeToggleButton />
             <div className="lg:hidden relative">
               <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="bg-transparent hover:bg-muted border-none p-2 rounded-xl transition-colors">
                 <Menu className="h-6 w-6" />
@@ -176,17 +125,6 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
         <header className="relative w-full aspect-video rounded-3xl overflow-hidden">
           <img src={backgroundImage} alt="Earth from space at night" className={`w-full h-full absolute inset-0 object-cover transition-opacity duration-500 ${isVideoPlaying ? 'opacity-0' : 'opacity-100'}`} />
           <video ref={videoRef} src={videoUrl} className={`w-full h-full absolute inset-0 object-cover transition-opacity duration-500 ${isVideoPlaying ? 'opacity-100' : 'opacity-0'}`} onEnded={handleVideoEnded} playsInline muted loop autoPlay />
-          <div className="absolute bottom-5 right-5 z-10">
-            {!isVideoPlaying ? (
-              <button onClick={handlePlayVideo} className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center hover:bg-white/30 transition-all duration-200 shadow-lg">
-                <Play className="h-7 w-7 text-white fill-white ml-1" />
-              </button>
-            ) : (
-              <button onClick={isVideoPaused ? handleResumeVideo : handlePauseVideo} className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center hover:bg-white/30 transition-all duration-200 shadow-lg">
-                {isVideoPaused ? <Play className="h-7 w-7 text-white fill-white ml-1" /> : <Pause className="h-7 w-7 text-white fill-white" />}
-              </button>
-            )}
-          </div>
         </header>
       </div>
     </main>
