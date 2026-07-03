@@ -2,7 +2,7 @@
 
 const { Kafka } = require('kafkajs');
 
-function makeConsumer(brokers, groupId, engines) {
+function makeConsumer(brokers, groupId, engines, db = null) {
   const kafka = new Kafka({ clientId: 'marketpulse-engine', brokers });
   const consumer = kafka.consumer({ groupId });
 
@@ -15,7 +15,10 @@ function makeConsumer(brokers, groupId, engines) {
           const order = JSON.parse(message.value.toString());
           const engine = engines.get(order.symbol);
           if (!engine) return; // unknown symbol, drop (would dead-letter in prod)
-          engine.submit(order);
+          const accepted = engine.submit(order);
+          // Mirrors what the synchronous HTTP path does: log the order
+          // event once it's actually been submitted to the engine.
+          if (db) await db.logOrderEvent(accepted).catch((e) => console.error('logOrderEvent failed', e.message));
         },
       });
     },

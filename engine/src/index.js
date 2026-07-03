@@ -8,6 +8,9 @@ const { RiskEngine } = require('./risk/RiskEngine');
 const { FeedServer } = require('./ws/FeedServer');
 const { buildApp } = require('./app');
 const { Db } = require('./db/postgres');
+const { RedisCache } = require('./db/redis');
+const { makeProducer } = require('./kafka/producer');
+const { makeConsumer } = require('./kafka/consumer');
 
 const SYMBOLS = (process.env.SYMBOLS || 'AAPL,MSFT,BTC-USD').split(',');
 const PORT = process.env.PORT || 4000;
@@ -72,15 +75,66 @@ async function main() {
     }
   }
 
-  const app = buildApp({ engines, riskEngine, db });
+  // Redis: optional read-through/write-through cache for order book
+  // depth. Absent REDIS_URL, redisCache stays null and router.js /
+  // FeedServer.js fall back to computing depth directly — no behavior
+  // change, same as before this was wired in.
+  let redisCache = null;
+  if (process.env.REDIS_URL) {
+    redisCache = new RedisCache(process.env.REDIS_URL);
+    await redisCache.connect();
+    console.log('[redis] connected — order book depth caching enabled');
+  }
+
+  // Kafka: optional async order intake. Absent KAFKA_BROKERS,
+  // kafkaProducer stays null and POST /orders keeps calling
+  // engine.submit() directly (synchronous, same response shape the
+  // test suite and existing clients expect). With it set, POST /orders
+  // publishes to orders.intake and returns 202; the consumer started
+  // below is what actually calls engine.submit(), off the request path.
+  let kafkaProducer = null;
+  let kafkaConsumer = null;
+  if (process.env.KAFKA_BROKERS) {
+    const brokers = process.env.KAFKA_BROKERS.split(',').map((b) => b.trim());
+    kafkaProducer = makeProducer(brokers);
+    await kafkaProducer.connect();
+
+    kafkaConsumer = makeConsumer(brokers, process.env.KAFKA_GROUP_ID || 'marketpulse-engine', engines, db);
+    await kafkaConsumer.start();
+    console.log(`[kafka] connected (${brokers.join(', ')}) — async order intake enabled`);
+  }
+
+  const app = buildApp({ engines, riskEngine, db, kafkaProducer, redisCache });
 
   const server = http.createServer(app);
-  new FeedServer(server, engines); // attaches /  (default path) ws upgrade handler
+  new FeedServer(server, engines, redisCache); // attaches /  (default path) ws upgrade handler
 
   server.listen(PORT, () => {
     console.log(`MarketPulse engine listening on :${PORT}`);
     console.log(`Symbols: ${SYMBOLS.join(', ')}`);
   });
+
+  // Graceful shutdown: without this, a redeploy or `docker compose down`
+  // kills the process while Kafka/Redis connections are still open,
+  // which can leave the consumer group in a bad rebalance state or drop
+  // in-flight Redis writes. SIGTERM is what Docker/Render send first.
+  let shuttingDown = false;
+  async function shutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`\n${signal} received, shutting down gracefully...`);
+
+    server.close();
+
+    if (kafkaConsumer) await kafkaConsumer.stop().catch((e) => console.error('[kafka] consumer stop failed', e.message));
+    if (kafkaProducer) await kafkaProducer.disconnect().catch((e) => console.error('[kafka] producer disconnect failed', e.message));
+    if (redisCache) await redisCache.client.quit().catch((e) => console.error('[redis] quit failed', e.message));
+    if (db) await db.close?.().catch((e) => console.error('[db] close failed', e.message));
+
+    process.exit(0);
+  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 main().catch((err) => {

@@ -63,7 +63,7 @@ function docsAuth(req, res, next) {
  * supertest without opening a real socket, and so index.js stays focused
  * on process wiring (DB connections, server.listen, signal handling).
  */
-function buildApp({ engines, riskEngine, db }) {
+function buildApp({ engines, riskEngine, db, kafkaProducer, redisCache }) {
   const app = express();
   app.use(cors({ origin: ALLOWED_ORIGINS }));
   app.use(express.json());
@@ -74,7 +74,7 @@ function buildApp({ engines, riskEngine, db }) {
   const openapiDoc = YAML.load(openapiPath);
   app.use('/docs', docsAuth, swaggerUi.serve, swaggerUi.setup(openapiDoc));
 
-  app.use('/api', buildRouter({ engines, riskEngine, db }));
+  app.use('/api', buildRouter({ engines, riskEngine, db, kafkaProducer, redisCache }));
 
   return app;
 }

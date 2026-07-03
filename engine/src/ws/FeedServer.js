@@ -9,9 +9,10 @@ const { WebSocketServer } = require('ws');
  * notes per-symbol subscription as a next step.
  */
 class FeedServer {
-  constructor(server, engines) {
+  constructor(server, engines, redisCache = null) {
     this.wss = new WebSocketServer({ server });
     this.engines = engines; // Map<symbol, MatchingEngine>
+    this.redisCache = redisCache;
 
     this.wss.on('connection', (ws) => {
       // Send an initial snapshot on connect
@@ -22,8 +23,13 @@ class FeedServer {
 
     for (const [symbol, engine] of this.engines.entries()) {
       engine.on('trade', (trade) => this._broadcast({ type: 'trade', symbol, data: trade }));
-      const pushDepth = () =>
-        this._broadcast({ type: 'depth', symbol, data: engine.depth() });
+      const pushDepth = () => {
+        const depth = engine.depth();
+        this._broadcast({ type: 'depth', symbol, data: depth });
+        // Write-through: keeps the REST /orderbook cache close to
+        // real-time instead of only refreshing on TTL expiry/cache miss.
+        if (this.redisCache) this.redisCache.cacheDepth(symbol, depth).catch(() => {});
+      };
       engine.on('trade', pushDepth);
       engine.on('order:accepted', pushDepth);
       engine.on('order:cancelled', pushDepth);

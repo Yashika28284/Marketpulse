@@ -32,7 +32,7 @@ async function resolveAccountId(db, raw) {
   return { accountId: raw, found: !!user };
 }
 
-function buildRouter({ engines, riskEngine, db }) {
+function buildRouter({ engines, riskEngine, db, kafkaProducer, redisCache }) {
   const router = express.Router();
 
   // Dev-only: mint a token for any accountId (+ optional role), no
@@ -107,7 +107,7 @@ function buildRouter({ engines, riskEngine, db }) {
     if (!['buy', 'sell'].includes(side)) return res.status(400).json({ error: 'side must be buy/sell' });
     if (!qty || qty <= 0) return res.status(400).json({ error: 'qty must be > 0' });
 
-    const order = engine.submit({
+    const orderInput = {
       accountId: req.account.accountId,
       symbol,
       side,
@@ -115,7 +115,26 @@ function buildRouter({ engines, riskEngine, db }) {
       price,
       stopPrice,
       qty,
-    });
+    };
+
+    // When Kafka is configured, decouple intake from matching: publish
+    // to orders.intake and return 202 immediately. A separate consumer
+    // (started in index.js) reads the topic and calls engine.submit()
+    // off the HTTP request path. Clients get the accepted order back
+    // over the WebSocket feed (order:accepted) rather than in this
+    // response. Falls back to the original synchronous path when
+    // KAFKA_BROKERS isn't set, which is also what the test suite uses.
+    if (kafkaProducer) {
+      const pendingId = crypto.randomUUID();
+      try {
+        await kafkaProducer.sendOrder({ ...orderInput, clientOrderId: pendingId });
+      } catch (err) {
+        return res.status(503).json({ error: 'order intake unavailable' });
+      }
+      return res.status(202).json({ status: 'pending', clientOrderId: pendingId, symbol, side, type, price, stopPrice, qty });
+    }
+
+    const order = engine.submit(orderInput);
 
     if (db) await db.logOrderEvent(order).catch(() => {});
     res.status(201).json(order);
@@ -139,10 +158,29 @@ function buildRouter({ engines, riskEngine, db }) {
     res.status(ok ? 200 : 404).json({ cancelled: ok });
   });
 
-  router.get('/orderbook/:symbol', (req, res) => {
+  router.get('/orderbook/:symbol', async (req, res) => {
     const engine = engines.get(req.params.symbol);
     if (!engine) return res.status(404).json({ error: 'unknown symbol' });
-    res.json(engine.depth(Number(req.query.levels) || 10));
+
+    const levels = Number(req.query.levels) || 10;
+
+    // Read-through cache, default levels only (10) — matches what
+    // FeedServer writes on every broadcast. Non-default level requests
+    // skip the cache and go straight to the engine, since caching every
+    // possible levels value isn't worth it here.
+    if (redisCache && levels === 10) {
+      try {
+        const cached = await redisCache.getCachedDepth(req.params.symbol);
+        if (cached) return res.json(cached);
+      } catch (err) {
+        // Redis hiccup shouldn't take down the endpoint — fall through to engine.
+      }
+      const depth = engine.depth(levels);
+      redisCache.cacheDepth(req.params.symbol, depth).catch(() => {});
+      return res.json(depth);
+    }
+
+    res.json(engine.depth(levels));
   });
 
   router.get('/account', (req, res) => {
