@@ -33,6 +33,40 @@ test('GET /docs serves the Swagger UI', async () => {
   assert.match(res.text, /swagger/i);
 });
 
+test('GET /docs stays open when DOCS_USER/DOCS_PASSWORD are not set (default, unchanged behavior)', async () => {
+  delete process.env.DOCS_USER;
+  delete process.env.DOCS_PASSWORD;
+  const app = freshApp();
+  const res = await request(app).get('/docs/');
+  assert.equal(res.status, 200);
+});
+
+test('GET /docs requires Basic Auth once DOCS_USER/DOCS_PASSWORD are set', async () => {
+  process.env.DOCS_USER = 'admin';
+  process.env.DOCS_PASSWORD = 'sup3r-secret';
+  try {
+    const app = freshApp();
+
+    const noAuth = await request(app).get('/docs/');
+    assert.equal(noAuth.status, 401);
+
+    const wrongAuth = await request(app)
+      .get('/docs/')
+      .set('Authorization', `Basic ${Buffer.from('admin:wrong-password').toString('base64')}`);
+    assert.equal(wrongAuth.status, 401);
+
+    const rightAuth = await request(app)
+      .get('/docs/')
+      .set('Authorization', `Basic ${Buffer.from('admin:sup3r-secret').toString('base64')}`);
+    assert.equal(rightAuth.status, 200);
+  } finally {
+    // Always clean up, even on assertion failure, so this doesn't leak
+    // into every other test in the file that hits /docs.
+    delete process.env.DOCS_USER;
+    delete process.env.DOCS_PASSWORD;
+  }
+});
+
 test('requests without a token are rejected', async () => {
   const app = freshApp();
   const res = await request(app).get('/api/account');
