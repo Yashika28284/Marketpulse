@@ -15,31 +15,75 @@ services:
       POSTGRES_DB: marketpulse
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marketpulse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   redis:
     image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.0
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+      # Plain TCP-connect healthcheck via bash's /dev/tcp, deliberately
+      # NOT using `nc` — Confluent's images don't ship netcat, so an
+      # nc-based healthcheck fails with "command not found" regardless
+      # of whether Zookeeper itself is healthy. bash is guaranteed to
+      # be present, so this has no extra dependency to go wrong.
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/2181' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
+  # cp-kafka boots the container fast but the broker itself isn't ready
+  # to accept connections for a while after that (it has to register
+  # with zookeeper first). Without a healthcheck here, `engine`'s
+  # `depends_on` only waits for this container to *start*, not for
+  # Kafka to actually be listening on 9092 — so engine would race ahead,
+  # fail to connect, exhaust kafkajs's retries, and crash on a fresh
+  # `docker compose up --build`. The healthcheck below makes `depends_on:
+  # condition: service_healthy` on engine actually wait for a broker
+  # that's really up.
   kafka:
     image: confluentinc/cp-kafka:7.6.0
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
 
   engine:
     build: ./engine
+    # Restarts automatically if it still crashes on startup (e.g. Kafka
+    # takes longer than the healthcheck window on a slow machine). Not
+    # `always`, since a genuine fatal config error (bad JWT_SECRET in
+    # prod, etc.) should stay dead rather than crash-loop forever.
+    restart: on-failure
     depends_on:
-      - postgres
-      - redis
-      - kafka
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     environment:
       PORT: 4000
       NODE_ENV: ${NODE_ENV:-development}

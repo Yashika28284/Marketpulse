@@ -10,8 +10,8 @@ export default function OrderBook({ symbol, depth }) {
         <div className="side asks">
           {[...depth.asks].reverse().map((lvl) => (
             <div key={lvl.price} className="row ask">
-              <span>{lvl.price.toFixed(2)}</span>
-              <span>{lvl.qty}</span>
+              <span>{lvl.price?.toFixed?.(2) ?? "-"}</span>
+              <span>{lvl.qty?.toFixed?.(2) ?? "-"}</span>
             </div>
           ))}
         </div>

@@ -120,6 +120,19 @@ class MatchingEngine extends EventEmitter {
         order.status = order.remaining === 0 ? 'filled' : 'partial';
         resting.status = resting.remaining === 0 ? 'filled' : 'partial';
 
+        // Remove the exhausted resting order from the book BEFORE
+        // emitting 'trade' — FeedServer's depth broadcast listens on
+        // 'trade' and reads book state synchronously as soon as it
+        // fires. If cleanup ran after emit, the snapshot sent to
+        // clients would still contain a price level whose quantity is
+        // already 0 but hasn't been removed yet, showing as a
+        // never-clearing "ghost" row on the dashboard until some later
+        // event happened to refresh it.
+        if (resting.remaining === 0) {
+          level.shift();
+          this.book.orderIndex.delete(resting.id);
+        }
+
         const trade = {
           id: nextOrderId(),
           symbol: this.symbol,
@@ -135,11 +148,6 @@ class MatchingEngine extends EventEmitter {
         this.emit('trade', trade);
 
         if (this.riskEngine) this.riskEngine.applyFill(trade);
-
-        if (resting.remaining === 0) {
-          level.shift();
-          this.book.orderIndex.delete(resting.id);
-        }
       }
 
       if (!level || level.length === 0) oppositeMap.delete(bestPrice);

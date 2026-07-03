@@ -96,11 +96,17 @@ class OrderBook {
     const bidPrices = [...this.bids.keys()].sort((a, b) => b - a).slice(0, levels);
     const askPrices = [...this.asks.keys()].sort((a, b) => a - b).slice(0, levels);
     const agg = (map, prices) =>
-      prices.map((p) => ({
-        price: p,
-        qty: map.get(p).reduce((sum, o) => sum + o.remaining, 0),
-        orders: map.get(p).length,
-      }));
+      prices
+        .map((p) => ({
+          price: p,
+          qty: map.get(p).reduce((sum, o) => sum + o.remaining, 0),
+          orders: map.get(p).length,
+        }))
+        // Defense-in-depth: a level should never legitimately be at 0
+        // qty and still present (the book removes exhausted orders as
+        // they fill), but if it ever happens, don't ship a ghost row
+        // to clients.
+        .filter((lvl) => lvl.qty > 0);
     return { symbol: this.symbol, bids: agg(this.bids, bidPrices), asks: agg(this.asks, askPrices) };
   }
 }
