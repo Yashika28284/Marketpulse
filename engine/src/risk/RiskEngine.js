@@ -2,18 +2,31 @@
 
 /**
  * Deliberately simple, deliberately explained. The honest scope here is:
- *   exposure = sum(|position_qty| * last_price) per symbol, per account
+ *   exposure = sum(|position_qty| * mark_price) per symbol, per account
  *   reject new orders that would push exposure over the account's limit
+ *
+ * Mark price = a rolling VWAP over the last MARK_PRICE_WINDOW trades for
+ * that symbol, not the single last print. In a thin book (exactly what
+ * this engine has — one matching engine, no real market makers), a
+ * single outlier order can otherwise become the mark price for an
+ * entire position instantly. That's the same mechanism behind real
+ * "marking the close" manipulation: print one weird trade, and every
+ * position in that symbol gets revalued off it. A short VWAP window
+ * smooths that out without pulling in real-market infrastructure
+ * (NBBO/settlement feeds) this project has no need to simulate.
  *
  * What this does NOT do (call this out proactively in interviews):
  *   - no cross-margin / portfolio netting across correlated symbols
  *   - no intraday mark-to-market revaluation loop (positions are marked
- *     at last trade price on demand, not on a timer)
+ *     on demand, off the trade history, not on a timer)
  *   - no multi-leg / spread margining
  * Next step if extending: a periodic mark-to-market job that re-prices
- * all open positions off the latest trade and re-checks limits, so a
- * price move (not just a new order) can also trigger a margin breach.
+ * all open positions on a timer (not just on new trades) and re-checks
+ * limits, so a price move alone (not just a new order) can also trigger
+ * a margin breach.
  */
+const MARK_PRICE_WINDOW = 20; // number of recent trades per symbol to VWAP over
+
 class RiskEngine {
   constructor({ defaultExposureLimit = 1_000_000, defaultPositionLimit = 10_000 } = {}) {
     this.defaultExposureLimit = defaultExposureLimit;
@@ -23,8 +36,12 @@ class RiskEngine {
     this.accountLimits = new Map();
     // accountId -> symbol -> signed qty (+long / -short)
     this.positions = new Map();
-    // symbol -> last trade price
+    // symbol -> last trade price (used as a fallback ref price for
+    // market orders — not for exposure, see _markPrice below)
     this.lastPrice = new Map();
+    // symbol -> array of { price, qty } for the most recent trades,
+    // capped at MARK_PRICE_WINDOW entries, oldest first
+    this.tradeHistory = new Map();
   }
 
   setAccountLimits(accountId, { exposureLimit, positionLimit }) {
@@ -47,13 +64,39 @@ class RiskEngine {
     return acct.get(symbol);
   }
 
+  /**
+   * Volume-weighted average price over the last MARK_PRICE_WINDOW trades
+   * for a symbol. Falls back to the raw last trade price if there's no
+   * history yet (e.g. right after boot, before any trade has occurred),
+   * and to 0 if the symbol has never traded at all.
+   */
+  _markPrice(symbol) {
+    const history = this.tradeHistory.get(symbol);
+    if (!history || history.length === 0) {
+      return this.lastPrice.get(symbol) || 0;
+    }
+    let notional = 0;
+    let volume = 0;
+    for (const { price, qty } of history) {
+      notional += price * qty;
+      volume += qty;
+    }
+    return volume > 0 ? notional / volume : 0;
+  }
+
+  _recordTrade(symbol, price, qty) {
+    if (!this.tradeHistory.has(symbol)) this.tradeHistory.set(symbol, []);
+    const history = this.tradeHistory.get(symbol);
+    history.push({ price, qty });
+    if (history.length > MARK_PRICE_WINDOW) history.shift();
+  }
+
   _accountExposure(accountId) {
     const acct = this.positions.get(accountId);
     if (!acct) return 0;
     let total = 0;
     for (const [symbol, qty] of acct.entries()) {
-      const px = this.lastPrice.get(symbol) || 0;
-      total += Math.abs(qty) * px;
+      total += Math.abs(qty) * this._markPrice(symbol);
     }
     return total;
   }
@@ -61,11 +104,12 @@ class RiskEngine {
   /**
    * Pre-trade check, run before an order touches the book.
    * Uses a conservative worst-case assumption: assume the order fully
-   * fills at its limit price (or last trade price for market orders).
+   * fills at its limit price (or the current mark price for market
+   * orders, since there's no limit price to fall back on).
    */
   checkOrder(order) {
     const { exposureLimit, positionLimit } = this._limitsFor(order.accountId);
-    const refPrice = order.price ?? this.lastPrice.get(order.symbol) ?? 0;
+    const refPrice = order.price ?? this._markPrice(order.symbol);
 
     const currentQty = this._getPosition(order.accountId, order.symbol);
     const delta = order.side === 'buy' ? order.qty : -order.qty;
@@ -77,7 +121,7 @@ class RiskEngine {
 
     const currentExposure = this._accountExposure(order.accountId);
     const projectedExposure =
-      currentExposure - Math.abs(currentQty) * (this.lastPrice.get(order.symbol) || 0) +
+      currentExposure - Math.abs(currentQty) * this._markPrice(order.symbol) +
       Math.abs(projectedQty) * refPrice;
 
     if (projectedExposure > exposureLimit) {
@@ -89,10 +133,13 @@ class RiskEngine {
 
   /**
    * Called by the matching engine after a trade executes — updates real
-   * positions and marks the symbol's last price.
+   * positions, marks the symbol's last price (for market-order ref
+   * pricing), and feeds the trade into the VWAP window used for
+   * exposure calculations.
    */
   applyFill(trade) {
     this.lastPrice.set(trade.symbol, trade.price);
+    this._recordTrade(trade.symbol, trade.price, trade.qty);
 
     const buyerQty = this._getPosition(trade.buyAccountId, trade.symbol);
     this.positions.get(trade.buyAccountId).set(trade.symbol, buyerQty + trade.qty);

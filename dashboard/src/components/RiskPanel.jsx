@@ -2,21 +2,36 @@ import React, { useEffect, useState } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
-export default function RiskPanel({ token }) {
+export default function RiskPanel({ token, onAuthError }) {
   const [summary, setSummary] = useState(null);
 
   useEffect(() => {
     if (!token) return;
     const fetchSummary = () => {
       fetch(`${API_URL}/account`, { headers: { Authorization: `Bearer ${token}` } })
-        .then((r) => r.json())
-        .then(setSummary)
+        .then(async (r) => {
+          // A 401 here means the stored token is invalid/expired (e.g.
+          // stale localStorage from an earlier run). Don't treat the
+          // error body as a summary — that's how "invalid token" ends
+          // up masquerading as { positions: undefined } and crashing
+          // the Object.entries() below. Bounce back to the login screen
+          // instead so the person can re-authenticate.
+          if (r.status === 401) {
+            onAuthError?.();
+            return null;
+          }
+          if (!r.ok) return null;
+          return r.json();
+        })
+        .then((data) => {
+          if (data) setSummary(data);
+        })
         .catch(() => {});
     };
     fetchSummary();
     const id = setInterval(fetchSummary, 3000);
     return () => clearInterval(id);
-  }, [token]);
+  }, [token, onAuthError]);
 
   if (!summary) return <div className="panel">Risk: loading...</div>;
 
@@ -26,7 +41,7 @@ export default function RiskPanel({ token }) {
   // qty, or vice versa) nets to exactly 0 — that's "no position", not
   // worth showing as a row. Only display symbols you're actually
   // holding one side of right now.
-  const openPositions = Object.entries(summary.positions).filter(([, qty]) => qty !== 0);
+  const openPositions = Object.entries(summary.positions || {}).filter(([, qty]) => qty !== 0);
 
   return (
     <div className="panel">

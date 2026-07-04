@@ -117,13 +117,14 @@ function buildRouter({ engines, riskEngine, db, kafkaProducer, redisCache }) {
       qty,
     };
 
-    // When Kafka is configured, decouple intake from matching: publish
-    // to orders.intake and return 202 immediately. A separate consumer
-    // (started in index.js) reads the topic and calls engine.submit()
-    // off the HTTP request path. Clients get the accepted order back
-    // over the WebSocket feed (order:accepted) rather than in this
-    // response. Falls back to the original synchronous path when
-    // KAFKA_BROKERS isn't set, which is also what the test suite uses.
+    // Kafka is required infrastructure (index.js refuses to boot without
+    // it), so this always takes the async path: publish to orders.intake
+    // and return 202 immediately. A separate consumer (started in
+    // index.js) reads the topic and calls engine.submit() off the HTTP
+    // request path. Clients get the accepted order back over the
+    // WebSocket feed (order:accepted) rather than in this response.
+    // The `kafkaProducer` check remains as defense-in-depth in case a
+    // test harness constructs the router without one.
     if (kafkaProducer) {
       const pendingId = crypto.randomUUID();
       try {
@@ -136,7 +137,7 @@ function buildRouter({ engines, riskEngine, db, kafkaProducer, redisCache }) {
 
     const order = engine.submit(orderInput);
 
-    if (db) await db.logOrderEvent(order).catch(() => {});
+    if (db) await db.logOrderEvent(order).catch(() => { });
     res.status(201).json(order);
   });
 
@@ -167,7 +168,10 @@ function buildRouter({ engines, riskEngine, db, kafkaProducer, redisCache }) {
     // Read-through cache, default levels only (10) — matches what
     // FeedServer writes on every broadcast. Non-default level requests
     // skip the cache and go straight to the engine, since caching every
-    // possible levels value isn't worth it here.
+    // possible levels value isn't worth it here. Redis is required
+    // infrastructure (index.js refuses to boot without it); the
+    // `redisCache` check remains as defense-in-depth in case a test
+    // harness constructs the router without one.
     if (redisCache && levels === 10) {
       try {
         const cached = await redisCache.getCachedDepth(req.params.symbol);
@@ -176,7 +180,7 @@ function buildRouter({ engines, riskEngine, db, kafkaProducer, redisCache }) {
         // Redis hiccup shouldn't take down the endpoint — fall through to engine.
       }
       const depth = engine.depth(levels);
-      redisCache.cacheDepth(req.params.symbol, depth).catch(() => {});
+      redisCache.cacheDepth(req.params.symbol, depth).catch(() => { });
       return res.json(depth);
     }
 
@@ -185,6 +189,25 @@ function buildRouter({ engines, riskEngine, db, kafkaProducer, redisCache }) {
 
   router.get('/account', (req, res) => {
     res.json(riskEngine.accountSummary(req.account.accountId));
+  });
+
+  // The account's own trade history, most recent first. Backed by
+  // Postgres (the same `trades` table logTrade() writes to for the
+  // audit log / boot replay), so it survives a page reload or a
+  // completely new login — unlike the WebSocket feed, which only ever
+  // shows fills that happen while that tab is connected.
+  //
+  // Without a db connected (dev-only in-memory mode, no Postgres), there
+  // is nothing to look up — the dashboard falls back to showing only
+  // trades that occur while it's open, which is already how it behaves.
+  router.get('/trades', async (req, res) => {
+    if (!db) return res.json({ trades: [] });
+    try {
+      const trades = await db.getTradesForAccount(req.account.accountId);
+      res.json({ trades });
+    } catch (err) {
+      res.status(500).json({ error: 'could not load trade history' });
+    }
   });
 
   // Admin-only: every registered account, with their live position/

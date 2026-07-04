@@ -75,34 +75,34 @@ async function main() {
     }
   }
 
-  // Redis: optional read-through/write-through cache for order book
-  // depth. Absent REDIS_URL, redisCache stays null and router.js /
-  // FeedServer.js fall back to computing depth directly — no behavior
-  // change, same as before this was wired in.
-  let redisCache = null;
-  if (process.env.REDIS_URL) {
-    redisCache = new RedisCache(process.env.REDIS_URL);
-    await redisCache.connect();
-    console.log('[redis] connected — order book depth caching enabled');
+  // Redis and Kafka are required infrastructure, not optional add-ons —
+  // fail fast (same pattern as the JWT_SECRET check above) rather than
+  // silently degrading to synchronous order intake / uncached depth
+  // reads, which would be a surprising difference between environments.
+  if (!process.env.REDIS_URL) {
+    console.error('Fatal: REDIS_URL is required (order book depth caching is not optional).');
+    process.exit(1);
+  }
+  if (!process.env.KAFKA_BROKERS) {
+    console.error('Fatal: KAFKA_BROKERS is required (async order intake is not optional).');
+    process.exit(1);
   }
 
-  // Kafka: optional async order intake. Absent KAFKA_BROKERS,
-  // kafkaProducer stays null and POST /orders keeps calling
-  // engine.submit() directly (synchronous, same response shape the
-  // test suite and existing clients expect). With it set, POST /orders
-  // publishes to orders.intake and returns 202; the consumer started
-  // below is what actually calls engine.submit(), off the request path.
-  let kafkaProducer = null;
-  let kafkaConsumer = null;
-  if (process.env.KAFKA_BROKERS) {
-    const brokers = process.env.KAFKA_BROKERS.split(',').map((b) => b.trim());
-    kafkaProducer = makeProducer(brokers);
-    await kafkaProducer.connect();
+  // Redis: read-through/write-through cache for order book depth.
+  const redisCache = new RedisCache(process.env.REDIS_URL);
+  await redisCache.connect();
+  console.log('[redis] connected — order book depth caching enabled');
 
-    kafkaConsumer = makeConsumer(brokers, process.env.KAFKA_GROUP_ID || 'marketpulse-engine', engines, db);
-    await kafkaConsumer.start();
-    console.log(`[kafka] connected (${brokers.join(', ')}) — async order intake enabled`);
-  }
+  // Kafka: async order intake. POST /orders publishes to orders.intake
+  // and returns 202; the consumer started below is what actually calls
+  // engine.submit(), off the request path.
+  const brokers = process.env.KAFKA_BROKERS.split(',').map((b) => b.trim());
+  const kafkaProducer = makeProducer(brokers);
+  await kafkaProducer.connect();
+
+  const kafkaConsumer = makeConsumer(brokers, process.env.KAFKA_GROUP_ID || 'marketpulse-engine', engines, db);
+  await kafkaConsumer.start();
+  console.log(`[kafka] connected (${brokers.join(', ')}) — async order intake enabled`);
 
   const app = buildApp({ engines, riskEngine, db, kafkaProducer, redisCache });
 

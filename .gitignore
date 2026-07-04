@@ -1,24 +1,109 @@
-# Dependencies
-node_modules/
+# =========================================================================
+# MarketPulse .gitignore
+# Monorepo: engine/ (Node.js + Postgres + Redis + Kafka), dashboard/ (Vite/React)
+# =========================================================================
 
-# Environment files (never commit secrets)
+# ---- Dependencies ----
+node_modules/
+**/node_modules/
+.pnp/
+.pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# ---- Environment / secrets ----
+# Never commit real secrets. .env.example stays tracked as the template.
 .env
 .env.local
 .env.*.local
+.env.development
+.env.production
+.env.test
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+**/secrets/
+credentials.json
+service-account*.json
 
-# Build output
+# ---- Build output ----
 dist/
 build/
+out/
+.next/
+.nuxt/
+.vite/
+.turbo/
+*.tsbuildinfo
 
-# Logs
+# ---- Logs ----
 *.log
+logs/
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# OS / editor cruft
+# ---- Test / coverage ----
+coverage/
+.nyc_output/
+*.lcov
+junit.xml
+
+# ---- Runtime data (would only appear if something is run/bind-mounted locally) ----
+pids/
+*.pid
+*.seed
+*.pid.lock
+dump.rdb
+*.rdb
+kafka-logs/
+zookeeper-data/
+zookeeper-log/
+
+# ---- Docker ----
+docker-compose.override.yml
+docker-compose.*.local.yml
+.docker/
+
+# ---- Database ----
+*.sqlite
+*.sqlite3
+*.db
+/pgdata/
+postgres-data/
+
+# ---- OS / editor cruft ----
 .DS_Store
 Thumbs.db
+Desktop.ini
 .vscode/
+!.vscode/extensions.json
 .idea/
+*.swp
+*.swo
+*~
 
-# Test / coverage output
-coverage/
+# ---- Package manager artifacts ----
+.npm/
+.eslintcache
+.stylelintcache
+
+# ---- Vite / TS incremental ----
+*.local
+
+# ---- Misc accidental artifacts ----
+# Guards against zip/export mistakes creating a nested duplicate of the
+# whole repo (this exact thing showed up in this project's working tree).
+/marketpulse/marketpulse/
+
+# ---- Cloud/deploy tool state (uncomment as applicable) ----
+# .vercel/
+# .netlify/
+# .serverless/

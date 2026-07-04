@@ -156,6 +156,32 @@ class Db {
       ts: r.ts,
     }));
   }
+
+  // One account's own trade history (either side), most recent first —
+  // backs GET /trades so "Trade Prints" survives a page reload/re-login
+  // instead of only ever showing fills that happened to occur while the
+  // WebSocket tab was open.
+  async getTradesForAccount(accountId, limit = 200) {
+    const result = await this.pool.query(
+      `SELECT trade_id, symbol, price, qty, buy_order_id, sell_order_id, buy_account_id, sell_account_id, ts
+       FROM trades
+       WHERE buy_account_id = $1 OR sell_account_id = $1
+       ORDER BY ts DESC, id DESC
+       LIMIT $2`,
+      [accountId, limit]
+    );
+    return result.rows.map((r) => ({
+      id: r.trade_id,
+      symbol: r.symbol,
+      price: Number(r.price),
+      qty: Number(r.qty),
+      buyOrderId: r.buy_order_id,
+      sellOrderId: r.sell_order_id,
+      buyAccountId: r.buy_account_id,
+      sellAccountId: r.sell_account_id,
+      ts: r.ts,
+    }));
+  }
 }
 
 module.exports = { Db };

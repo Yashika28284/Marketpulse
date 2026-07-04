@@ -43,6 +43,18 @@ components:
         exposure: { type: number }
         exposureLimit: { type: number }
         positionLimit: { type: number }
+    Trade:
+      type: object
+      properties:
+        id: { type: string }
+        symbol: { type: string }
+        price: { type: number }
+        qty: { type: number }
+        buyOrderId: { type: string }
+        sellOrderId: { type: string }
+        buyAccountId: { type: string }
+        sellAccountId: { type: string }
+        ts: { type: string, format: date-time }
     Error:
       type: object
       properties:
@@ -262,6 +274,28 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AccountSummary' }
+
+  /api/trades:
+    get:
+      summary: Get the caller's own trade history, most recent first
+      description: >-
+        Persisted history from Postgres, not the live WebSocket feed — this
+        is what backs the dashboard's Trade Prints panel across a reload or
+        a fresh login. Returns an empty list (not an error) when no
+        database is configured, since there's nothing to look up in that
+        mode.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Trade history for the authenticated account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trades:
+                    type: array
+                    items: { $ref: '#/components/schemas/Trade' }
 
   /api/admin/accounts:
     get:
