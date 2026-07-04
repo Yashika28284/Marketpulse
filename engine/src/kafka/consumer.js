@@ -1,9 +1,10 @@
 'use strict';
 
 const { Kafka } = require('kafkajs');
+const { buildKafkaAuthConfig } = require('./config');
 
 function makeConsumer(brokers, groupId, engines, db = null) {
-  const kafka = new Kafka({ clientId: 'marketpulse-engine', brokers });
+  const kafka = new Kafka({ clientId: 'marketpulse-engine', brokers, ...buildKafkaAuthConfig() });
   const consumer = kafka.consumer({ groupId });
 
   return {

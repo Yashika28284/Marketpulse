@@ -1,6 +1,7 @@
 'use strict';
 
-const { Kafka } = require('kafkajs');
+const { Kafka, Partitioners } = require('kafkajs');
+const { buildKafkaAuthConfig } = require('./config');
 
 /**
  * Order intake -> Kafka -> matching engine. This decouples "accepting an
@@ -10,8 +11,8 @@ const { Kafka } = require('kafkajs');
  * to preserve time-priority ordering within a symbol.
  */
 function makeProducer(brokers) {
-  const kafka = new Kafka({ clientId: 'marketpulse-api', brokers });
-  const producer = kafka.producer();
+  const kafka = new Kafka({ clientId: 'marketpulse-api', brokers, ...buildKafkaAuthConfig() });
+  const producer = kafka.producer({ createPartitioner: Partitioners.LegacyPartitioner });
 
   return {
     async connect() {
