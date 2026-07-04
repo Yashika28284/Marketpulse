@@ -31,7 +31,7 @@ function buildKafkaAuthConfig() {
 
     let ca;
     if (process.env.KAFKA_CA_CERT_BASE64) {
-        ca = [Buffer.from(process.env.KAFKA_CA_CERT_BASE64, 'base64').toString('utf-8')];
+        ca = [Buffer.from(process.env.KAFKA_CA_CERT_BASE64.trim(), 'base64').toString('utf-8')];
     } else if (process.env.KAFKA_CA_CERT) {
         ca = [process.env.KAFKA_CA_CERT];
     }
@@ -42,6 +42,27 @@ function buildKafkaAuthConfig() {
             'Set KAFKA_CA_CERT_BASE64 (preferred) or KAFKA_CA_CERT.'
         );
     }
+
+    // TEMPORARY DIAGNOSTIC — remove once the "self-signed certificate in
+    // certificate chain" issue is resolved. Prints the shape of the decoded
+    // cert (never the cert body itself) so we can tell from Render's logs
+    // whether the base64 env var actually decodes to a complete, well-formed
+    // PEM. A healthy cert: starts with "-----BEGIN CERTIFICATE-----",
+    // ends with "-----END CERTIFICATE-----", length usually 1000-2000 chars,
+    // and beginCount === endCount === 1 (a chain would have more, but Aiven's
+    // is normally a single cert).
+    const certText = ca[0];
+    const beginCount = (certText.match(/-----BEGIN CERTIFICATE-----/g) || []).length;
+    const endCount = (certText.match(/-----END CERTIFICATE-----/g) || []).length;
+    console.log('[kafka][debug] decoded CA cert diagnostic:', {
+        length: certText.length,
+        startsCorrectly: certText.startsWith('-----BEGIN CERTIFICATE-----'),
+        endsCorrectly: certText.trim().endsWith('-----END CERTIFICATE-----'),
+        beginCount,
+        endCount,
+        first40: certText.slice(0, 40),
+        last40: certText.slice(-40),
+    });
 
     return {
         ssl: { ca },
