@@ -1,8 +1,13 @@
 import React, { useMemo } from 'react';
 import NeuralBackground from './neural-background';
 
-const NEON = '#00ff41';
-const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+// Monochrome "mercury" palette — matches the Neural Access login screen
+// (Inter for display type, Space Mono for labels/data, no neon green).
+const ACCENT = '#ffffff';
+const MERCURY = '#e0e0e0';
+const DIM = 'rgba(255,255,255,0.5)';
+const SANS = "'Inter', sans-serif";
+const MONO = "'Space Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
 // Real, verifiable talking points (from the engine's own README/tests)
 // instead of invented throughput/uptime numbers — this is a matching
@@ -55,8 +60,9 @@ const MarketPulseHero: React.FC = () => {
     return (
         <main
             className="fixed inset-0 flex flex-col overflow-hidden"
-            style={{ background: '#0e0e10', color: '#fff' }}
+            style={{ background: '#050505', color: '#fff', fontFamily: SANS }}
         >
+            <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;800&family=Space+Mono&display=swap');`}</style>
             <NeuralBackground />
 
             {/* Market-grid signature: a faint candlestick horizon along the
@@ -70,14 +76,14 @@ const MarketPulseHero: React.FC = () => {
             >
                 {candles.map((c, i) => (
                     <g key={i}>
-                        <line x1={c.x} y1={c.wickTop} x2={c.x} y2={c.wickBottom} stroke={NEON} strokeWidth={0.5} />
+                        <line x1={c.x} y1={c.wickTop} x2={c.x} y2={c.wickBottom} stroke={MERCURY} strokeWidth={0.5} />
                         <rect
                             x={c.x - 3}
                             y={c.bodyTop}
                             width={6}
                             height={c.bodyHeight}
-                            fill={NEON}
-                            opacity={c.up ? 0.9 : 0.35}
+                            fill={MERCURY}
+                            opacity={c.up ? 0.85 : 0.3}
                         />
                     </g>
                 ))}
@@ -88,15 +94,15 @@ const MarketPulseHero: React.FC = () => {
                     {/* Header */}
                     <div className="flex items-center justify-between pt-6">
                         <span
-                            className="text-sm font-bold tracking-[0.2em]"
-                            style={{ color: NEON, fontFamily: MONO }}
+                            className="text-[10px] tracking-[0.3em] uppercase"
+                            style={{ color: DIM, fontFamily: MONO }}
                         >
-                            MARKETPULSE
+                            MarketPulse
                         </span>
                         <button
                             onClick={() => goToAuth('login')}
-                            className="rounded-full border px-4 py-1.5 text-xs font-medium transition-colors hover:bg-white/10"
-                            style={{ borderColor: 'rgba(255,255,255,0.25)', color: '#fff' }}
+                            className="rounded-full border px-4 py-1.5 text-xs font-medium uppercase tracking-wide transition-colors hover:bg-white/10"
+                            style={{ borderColor: 'rgba(255,255,255,0.25)', color: '#fff', fontFamily: SANS }}
                         >
                             Login
                         </button>
@@ -106,14 +112,19 @@ const MarketPulseHero: React.FC = () => {
                     <div className="flex flex-1 flex-col items-center justify-center gap-9 text-center">
                         <div>
                             <h1
-                                className="font-bold leading-[0.95]"
-                                style={{ fontSize: 'clamp(2.75rem, 12vw, 4rem)', letterSpacing: '-0.02em' }}
+                                className="leading-[0.9]"
+                                style={{
+                                    fontFamily: SANS,
+                                    fontWeight: 800,
+                                    fontSize: 'clamp(2.75rem, 12vw, 3.5rem)',
+                                    letterSpacing: '-0.04em',
+                                }}
                             >
-                                MARKET<span style={{ color: NEON }}>PULSE</span>
+                                MARKET<span style={{ color: MERCURY }}>PULSE</span>
                             </h1>
                             <p
                                 className="mx-auto mt-5 max-w-xs text-sm sm:text-base"
-                                style={{ color: 'rgba(255,255,255,0.62)', lineHeight: 1.6 }}
+                                style={{ color: DIM, lineHeight: 1.6 }}
                             >
                                 A price-time priority matching engine with a live order book,
                                 pre-trade risk checks, and real-time trade prints — built the
@@ -123,14 +134,10 @@ const MarketPulseHero: React.FC = () => {
 
                         <button
                             onClick={() => goToAuth('register')}
-                            className="w-full rounded-full py-4 text-sm font-bold tracking-wide transition-transform active:scale-[0.98]"
-                            style={{
-                                background: NEON,
-                                color: '#05130a',
-                                boxShadow: '0 0 24px 2px rgba(0,255,65,0.45), 0 0 60px 10px rgba(0,255,65,0.15)',
-                            }}
+                            className="w-full rounded-full py-4 text-xs font-extrabold uppercase tracking-[0.2em] transition-all hover:tracking-[0.3em] active:scale-[0.98]"
+                            style={{ background: ACCENT, color: '#000', fontFamily: SANS }}
                         >
-                            GET STARTED
+                            Get Started
                         </button>
 
                         <div className="flex w-full flex-col gap-3" style={{ fontFamily: MONO }}>
@@ -140,12 +147,15 @@ const MarketPulseHero: React.FC = () => {
                                     className="flex items-baseline justify-between border-t pt-3"
                                     style={{ borderColor: 'rgba(255,255,255,0.1)' }}
                                 >
-                                    <span className="text-left text-sm font-bold sm:text-base" style={{ color: NEON }}>
+                                    <span
+                                        className="text-left text-sm font-bold sm:text-base"
+                                        style={{ color: MERCURY, fontFamily: SANS }}
+                                    >
                                         {m.value}
                                     </span>
                                     <span
-                                        className="text-right text-[10px] tracking-[0.15em]"
-                                        style={{ color: 'rgba(255,255,255,0.4)' }}
+                                        className="text-right text-[10px] tracking-[0.15em] uppercase"
+                                        style={{ color: DIM }}
                                     >
                                         {m.label}
                                     </span>
